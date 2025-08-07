@@ -4,6 +4,7 @@ import 'package:model_maker/parsing_area/json_model_generator/json_model_generat
 import 'package:model_maker/parsing_area/debouncer.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
+import 'package:model_maker/parsing_area/json_model_generator/json_format_utils.dart';
 
 /// 分体窗口
 class SplitWindow extends StatefulWidget {
@@ -24,6 +25,7 @@ class _SplitWindowState extends State<SplitWindow> {
   var textEditingController = TextEditingController();
   var textResultController = TextEditingController();
   late ParsingSettingsModel _confModel;
+  String _lastPastedContent = '';
 
   @override
   void didChangeDependencies() {
@@ -36,19 +38,33 @@ class _SplitWindowState extends State<SplitWindow> {
     _confModel.addListener(_handleConfChange);
   }
 
+  /// 检查并自动格式化粘贴的内容
+  void _checkAndFormatPastedContent(String newContent) {
+    final formatted = JsonFormatUtils.autoFormatJsonContent(newContent, _lastPastedContent);
+    if (formatted != newContent) {
+      setState(() {
+        textEditingController.text = formatted;
+        _lastPastedContent = formatted;
+      });
+    } else {
+      _lastPastedContent = newContent;
+    }
+  }
+
   /// 配置变更后刷新页面数据
   void _handleConfChange() {
     _debouncer.run(() {
       JsonModelGenerator.asyncGenerateModels(textEditingController.text, _confModel)
           .then((data) {
-            setState(() {
-              textResultController.text = data ?? '';
-              outputResult = textResultController.text;
-            });
-          }) // 成功回调
+        setState(() {
+          textResultController.text = data ?? '';
+          outputResult = textResultController.text;
+        });
+      }) // 成功回调
           .catchError((error) {
-            print('错误: $error');
-          })
+        print('错误: $error');
+        return null;
+      }) // 错误回调
           .whenComplete(() => print('操作完成')); // 最终回调
     });
   }
@@ -67,6 +83,8 @@ class _SplitWindowState extends State<SplitWindow> {
       _splitPosition = dx / screenWidth;
     });
   }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -93,6 +111,7 @@ class _SplitWindowState extends State<SplitWindow> {
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已复制输入内容')));
                 },
                 onChanged: (value) {
+                  _checkAndFormatPastedContent(value);
                   _confModel.resetpastedJsonString();
                   _handleConfChange();
                 },
